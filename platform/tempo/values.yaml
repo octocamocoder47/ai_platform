@@ -1,0 +1,90 @@
+---
+# Tempo Helm values (distributed tracing)
+tempo:
+  repository: grafana/tempo
+  tag: "2.6.1"
+  pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+  # Storage configuration
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: ""
+        endpoint: s3.amazonaws.com
+        access_key: ""
+        secret_key: ""
+        insecure: false
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/traces
+
+  # Ingest
+  ingester:
+    max_block_duration: 30m
+    lifecycler:
+      ring:
+        replication_factor: 3
+
+  # Query
+  querier:
+    max_concurrent_queries: 10
+
+  # Compactor
+  compactor:
+    compaction:
+      block_retention: 336h
+
+  # Distributor
+  distributor:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+      zipkin:
+        endpoint: 0.0.0.0:9411
+
+  # Metrics generator
+  metrics_generator:
+    enabled: true
+    registry:
+      external_labels:
+        source: tempo
+        cluster: "{{ .Values.global.cluster_name }}"
+
+tracing:
+  enabled: true
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: ""
+
+# MinIO for local dev — production should use S3/GCS
+minio:
+  enabled: false
+
+# Grafana datasource auto-provisioning
+datasource:
+  enabled: true
+  name: Tempo
+  uid: tempo
+  url: http://tempo:3100

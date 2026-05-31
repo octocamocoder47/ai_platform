@@ -1,0 +1,81 @@
+---
+# OpenTelemetry Operator Helm values
+certManager:
+  enabled: true
+
+manager:
+  image:
+    repository: ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator
+    tag: "0.115.0"
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  extraArgs:
+    - --enable-go-instrumentation
+    - --enable-jaeger-instrumentation
+
+admissionWebhooks:
+  certManager:
+    enabled: true
+
+# Default OpenTelemetry Collector config (auto-instrumentation)
+collector:
+  enabled: true
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.115.0"
+    pullPolicy: IfNotPresent
+
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+    exporters:
+      otlp:
+        endpoint: tempo-distributor:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+
+# Instrumentation CRDs deployed separately
+instrumentation:
+  enabled: true
+  default:
+    exporter:
+      endpoint: http://opentelemetry-collector:4317
+    propagators:
+      - tracecontext
+      - baggage
+      - b3
+    sampler:
+      type: parentbased_traceidratio
+      argument: "0.1"

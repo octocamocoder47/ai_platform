@@ -1,0 +1,31 @@
+external-secrets:
+  installCRDs: true
+
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: 128Mi
+    limits:
+      cpu: "500m"
+      memory: 512Mi
+
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+# SecretStore definitions (created separately per provider)
+secretStores:
+  - name: aws-secrets-manager
+    provider:
+      aws:
+        service: SecretsManager
+        region: us-west-2
+        auth:
+          jwt:
+            serviceAccountRef:
+              name: external-secrets-sa

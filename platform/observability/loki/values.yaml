@@ -1,0 +1,89 @@
+loki:
+  version: "3.0.0"
+
+  deploymentMode: SingleBinary
+
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: s3
+      bucketNames:
+        chunks: ai-platform-loki-chunks
+        ruler: ai-platform-loki-ruler
+        admin: ai-platform-loki-admin
+      s3:
+        region: us-west-2
+        s3ForcePathStyle: false
+        insecure: false
+
+  ingester:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  querier:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  queryFrontend:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
+
+  distributor:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
+
+  gateway:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 256Mi
+
+  monitoring:
+    dashboards:
+      enabled: true
+    alerts:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+
+  persistence:
+    enabled: true
+    size: 20Gi
+
+  promtail:
+    enabled: true
+    config:
+      clients:
+        - url: http://loki-gateway.monitoring.svc:80/loki/api/v1/push
+    resources:
+      requests:
+        cpu: "100m"
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 256Mi

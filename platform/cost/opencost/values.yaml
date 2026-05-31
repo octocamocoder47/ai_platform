@@ -1,0 +1,40 @@
+opencost:
+  opencost:
+    metrics:
+      serviceMonitor:
+        enabled: true
+      globalAggregation:
+        propagation: true
+
+    prometheus:
+      internal:
+        enabled: false
+      external:
+        url: http://prometheus.monitoring.svc:9090
+
+    exporter:
+      resources:
+        requests:
+          cpu: "200m"
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+
+    ui:
+      enabled: false
+
+  pricing:
+    enabled: true
+    customPricing:
+      CPU: 0.031611
+      RAM: 0.004237
+      GPU: 0.0
+      GPU_NVIDIA_TESLA_T4: 0.35
+      GPU_NVIDIA_A100: 1.50
+      GPU_NVIDIA_H100: 3.00
+      GPU_NVIDIA_L4: 0.50
+      spot: true
+      storage: 0.04
+      network: 0.0
+      sharedCost: 0.0

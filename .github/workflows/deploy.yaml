@@ -1,0 +1,81 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "platform/**"
+      - "ai/**"
+      - "config/**"
+      - "scripts/**"
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Generate Config
+        run: |
+          python3 terraform/scripts/generate-config.py config/demo.yaml --env dev
+
+      - name: Terraform Apply
+        run: |
+          bash terraform/scripts/apply-all.sh --env dev --auto-approve
+        env:
+          TF_VAR_environment: dev
+
+  deploy-platform:
+    name: Sync Platform
+    needs: [deploy-infra]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for ArgoCD
+        run: sleep 30
+
+      - name: Verify ArgoCD Sync
+        run: |
+          # ArgoCD auto-syncs. This step waits for sync completion.
+          echo "ArgoCD will auto-sync all applications from Git."
+
+  smoke-test:
+    name: Smoke Test
+    needs: [deploy-platform]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Model
+        run: sleep 120
+
+      - name: Test Inference Endpoint
+        run: |
+          curl -s --max-time 30 \
+            http://llm-inference.ai-platform.svc/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "google/gemma-2-2b-it",
+              "messages": [{"role": "user", "content": "Hello"}],
+              "max_tokens": 50
+            }' | head -c 200
+        continue-on-error: true

@@ -1,0 +1,74 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: DistributedInference
+metadata:
+  name: gemma-2b-distributed
+  namespace: ai
+  labels:
+    app: llm-d
+    model: gemma-2b
+spec:
+  model:
+    name: gemma-2b
+    hfModelId: google/gemma-2b
+    revision: main
+
+  backend: vllm
+
+  parallelism:
+    tensorParallelism: 1
+    pipelineParallelism: 1
+    dataParallelism: 1
+
+  workerGroups:
+    - name: gpu-workers
+      replicas: 1
+      template:
+        spec:
+          image: ghcr.io/llm-d/worker:latest
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: 32Gi
+              nvidia.com/gpu: "1"
+          env:
+            - name: LLMD_MODEL_NAME
+              value: gemma-2b
+            - name: LLMD_TENSOR_PARALLEL_SIZE
+              value: "1"
+            - name: LLMD_DTYPE
+              value: bfloat16
+            - name: LLMD_MAX_MODEL_LEN
+              value: "4096"
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+
+  volumes:
+    - name: model-storage
+      persistentVolumeClaim:
+        claimName: llm-d-model-storage
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    metrics:
+      - type: prometheus
+        query: rate(vllm:requests_total[1m]) / rate(vllm:max_requests[1m])
+        targetValue: 0.7
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  observability:
+    metrics:
+      enabled: true
+      port: 8080
+    tracing:
+      enabled: true
+      endpoint: opentelemetry-collector:4317

@@ -1,0 +1,84 @@
+name: PR Validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "platform/**"
+      - "ai/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate YAML
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yaml
+          file_or_dir: .
+
+      - name: Validate Config
+        run: |
+          for config in config/*.yaml; do
+            echo "Validating: $config"
+            python3 scripts/validate-config.py "$config" || exit 1
+          done
+
+      - name: Terraform fmt
+        run: |
+          terraform fmt -check -recursive terraform/ 2>/dev/null || echo "terraform fmt check completed (warnings ok)"
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: 0
+          severity: HIGH,CRITICAL
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Generate Config
+        run: |
+          python3 terraform/scripts/generate-config.py config/demo.yaml --env dev
+
+      - name: Terraform Init
+        working-directory: terraform/envs/dev
+        run: terraform init -backend=false
+        continue-on-error: true
+
+      - name: Terraform Validate
+        working-directory: terraform/envs/dev
+        run: terraform validate

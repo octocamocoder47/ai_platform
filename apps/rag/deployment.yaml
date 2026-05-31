@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-service
+  namespace: ai-inference
+  labels:
+    app: rag-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-service
+  template:
+    metadata:
+      labels:
+        app: rag-service
+    spec:
+      serviceAccountName: rag-service
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: rag
+          image: python:3.11-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install fastapi uvicorn openai sentence-transformers qdrant-client -q
+              cat > /app/main.py << 'EOF'
+              import os
+              from fastapi import FastAPI
+              from pydantic import BaseModel
+
+              app = FastAPI(title="RAG Demo")
+              INFERENCE_URL = os.getenv("INFERENCE_URL", "http://llm-inference.ai-platform.svc")
+
+              @app.get("/health")
+              def health():
+                  return {"status": "ok"}
+
+              @app.post("/rag/query")
+              def query(prompt: str):
+                  return {"response": "RAG endpoint placeholder. Configure Qdrant + embeddings for full RAG pipeline."}
+              EOF
+              uvicorn main:app --host 0.0.0.0 --port 8080
+          ports:
+            - containerPort: 8080
+          env:
+            - name: INFERENCE_URL
+              value: http://llm-inference-service:80
+          resources:
+            requests:
+              cpu: "200m"
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-service
+  namespace: ai-inference
+  labels:
+    app: rag-service
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: rag-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rag-service
+  namespace: ai-inference

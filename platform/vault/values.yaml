@@ -1,0 +1,78 @@
+---
+# Vault Helm values (HashiCorp Vault on Kubernetes)
+global:
+  enabled: true
+  tlsDisable: false
+  namespace: vault
+
+server:
+  image:
+    repository: hashicorp/vault
+    tag: "1.18.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 3
+
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        listener "tcp" {
+          tls_disable = false
+          address     = "0.0.0.0:8200"
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file  = "/vault/userconfig/vault-tls/tls.key"
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        service_registration "kubernetes" {}
+
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: vault.{{ .Values.global.namespace }}.svc
+
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: gp3
+
+  auditStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: gp3
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+  extraLabels:
+    platform: ai-platform
+    component: security
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+  serviceNodePort: null
+  externalPort: 8200
+
+injector:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

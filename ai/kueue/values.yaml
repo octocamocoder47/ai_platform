@@ -1,0 +1,73 @@
+kueue:
+  version: "0.10.0"
+
+  controllerManager:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  webhook:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 256Mi
+
+  metrics:
+    enable: true
+    serviceMonitor:
+      enabled: true
+
+  # Resource flavors (GPU types available in cluster)
+  config:
+    resourceFlavors:
+      - name: nvidia-tesla-t4
+        resources:
+          - name: nvidia.com/gpu
+            nodeSelector:
+              accelerator: nvidia-tesla-t4
+      - name: nvidia-h100
+        resources:
+          - name: nvidia.com/gpu
+            nodeSelector:
+              accelerator: nvidia-h100
+
+    # Cluster queues
+    clusterQueues:
+      - name: inference-queue
+        namespaceSelector:
+          matchLabels:
+            kueue.x-k8s.io/queue: inference
+        resourceGroups:
+          - coveredResources: ["nvidia.com/gpu"]
+            flavors:
+              - name: nvidia-tesla-t4
+                resources:
+                  - name: nvidia.com/gpu
+                    nominalQuota: 8
+              - name: nvidia-h100
+                resources:
+                  - name: nvidia.com/gpu
+                    nominalQuota: 16
+        fairSharing:
+          weight: 1
+
+      - name: batch-queue
+        namespaceSelector:
+          matchLabels:
+            kueue.x-k8s.io/queue: batch
+        resourceGroups:
+          - coveredResources: ["nvidia.com/gpu"]
+            flavors:
+              - name: nvidia-h100
+                resources:
+                  - name: nvidia.com/gpu
+                    nominalQuota: 32
+        fairSharing:
+          weight: 2

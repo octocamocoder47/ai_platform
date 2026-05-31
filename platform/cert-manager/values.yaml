@@ -1,0 +1,47 @@
+---
+# cert-manager Helm values
+installCRDs: true
+
+replicaCount: 2
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+
+webhook:
+  replicaCount: 2
+
+cainjector:
+  replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: ""
+
+config:
+  privateKeyAlgorithm: ECDSA
+  privateKeySize: 256
+
+extraArgs:
+  - --enable-certificate-owner-ref=true
+
+# ClusterIssuers will be created via Kubernetes manifests, not here
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    honorLabels: true

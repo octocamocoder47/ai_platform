@@ -1,0 +1,67 @@
+cilium:
+  version: "1.16.0"
+
+  # IPAM
+  ipam:
+    mode: kubernetes
+
+  # Hubble observability
+  hubble:
+    enabled: true
+    relay:
+      enabled: true
+    ui:
+      enabled: true
+      ingress:
+        enabled: false
+      service:
+        type: ClusterIP
+
+  # Gateway API
+  gatewayAPI:
+    enabled: true
+    enableAlpn: true
+    enableAppProtocol: true
+
+  # Security
+  l7Proxy: true
+  enableL7Proxy: true
+
+  encryption:
+    type: wireguard
+
+  # Performance
+  bandwidthManager:
+    enabled: true
+    bbr: true
+
+  bpf:
+    masquerade: true
+    tproxy: true
+
+  loadBalancer:
+    algorithm: maglev
+
+  # Rolling update
+  rollOutCiliumPods: true
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+  operator:
+    replicas: 1
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true

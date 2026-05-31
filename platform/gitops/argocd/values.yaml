@@ -1,0 +1,50 @@
+argo-cd:
+  global:
+    domain: argocd.ai-platform.internal
+
+  configs:
+    cm:
+      repositories: |
+        - url: https://github.com/your-org/ai-platform
+          type: git
+      url: https://argocd.ai-platform.internal
+
+    rbac:
+      policy.default: role:readonly
+      policy.csv: |
+        p, role:admin, applications, *, */*, allow
+        p, role:admin, clusters, *, *, allow
+
+  controller:
+    resources:
+      requests:
+        cpu: "1"
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+
+  repoServer:
+    resources:
+      requests:
+        cpu: "1"
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 1Gi
+
+  server:
+    ingress:
+      enabled: false
+    service:
+      type: ClusterIP
+    resources:
+      requests:
+        cpu: "500m"
+        memory: 256Mi
+
+  ha:
+    enabled: false
+
+  redis:
+    enabled: true

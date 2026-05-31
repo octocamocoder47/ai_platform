@@ -1,0 +1,200 @@
+apiVersion: platform.ai/v1
+kind: PlatformConfig
+metadata:
+  name: production
+  environment: prod
+
+spec:
+  providers:
+    primary: aws
+    aws:
+      region: us-east-1
+      accounts:
+        - name: network
+          id: ""
+          role: hub
+        - name: workloads-prod
+          id: ""
+          role: spoke
+        - name: shared-services
+          id: ""
+          role: shared
+        - name: security
+          id: ""
+          role: security
+
+  networking:
+    topology: hub-spoke
+    cross_account:
+      enabled: true
+      transit_gateway:
+        enabled: true
+        share_with_accounts: [workloads-prod, shared-services, security]
+    cross_cloud:
+      enabled: false
+    dns:
+      provider: route53
+      zone_name: ai-platform.example.com
+      private_zone: false
+    network_policies:
+      default_deny: true
+
+  kubernetes:
+    kind: eks
+    version: "1.31"
+    karpenter:
+      enabled: true
+    nodeGroups:
+      system:
+        name: system
+        instanceType: t3.medium
+        min: 3
+        max: 10
+        spot: false
+      gpu-inference:
+        name: gpu-inference
+        instanceType: g5.xlarge
+        min: 3
+        max: 20
+        gpu:
+          count: 1
+          type: nvidia-tesla-t4
+          sharing:
+            strategy: time-slicing
+            count: 4
+      gpu-batch:
+        name: gpu-batch
+        instanceType: p5.48xlarge
+        min: 1
+        max: 10
+        spot: true
+        gpu:
+          count: 8
+          type: nvidia-h100
+
+  inference:
+    model:
+      name: "google/gemma-2-2b-it"
+      hf_token: ${HF_TOKEN}
+    serving:
+      engines: 3
+      tensorParallelSize: 1
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      metrics:
+        - type: queue_depth
+          threshold: 3
+        - type: kv_cache
+          threshold: 0.80
+        - type: ttft
+          threshold: "5"
+
+  components:
+    gitops:
+      type: argocd
+      ha: true
+    networking:
+      cni: cilium
+      ingress:
+        type: gateway-api
+      certManager:
+        enabled: true
+        issuer: letsencrypt-prod
+    security:
+      policy:
+        engine: kyverno
+        mode: enforce
+      secrets:
+        engine: external-secrets
+      vault:
+        enabled: true
+        ha: true
+      supplyChain:
+        signing: cosign
+        scanning: trivy
+        sbom: syft
+    storage:
+      postgres:
+        enabled: true
+        operator: cnpg
+      redis:
+        enabled: true
+        operator: valkey
+      backup:
+        enabled: true
+        tool: velero
+        schedule: "0 2 * * *"
+        retention: 90d
+    cost:
+      enabled: true
+      tool: opencost
+    ai:
+      gpuOperator: true
+      kserve: true
+      llm-d: true
+      kueue: true
+      keda: true
+      harbor: true
+
+  observability:
+    metrics:
+      stack: kube-prometheus-stack
+      retention: 90d
+      storageSize: 200Gi
+    logging:
+      backend: loki
+      retention: 30d
+      storageSize: 500Gi
+    tracing:
+      backend: tempo
+      sampling: 0.1
+      retention: 30d
+      storageSize: 100Gi
+    dashboards:
+      enabled: true
+      grafana:
+        ingress:
+          enabled: true
+          host: grafana.ai-platform.example.com
+    alerting:
+      enabled: true
+      channels:
+        - type: slack
+          webhook: ${SLACK_WEBHOOK}
+        - type: pagerduty
+          key: ${PAGERDUTY_KEY}
+
+  security:
+    podSecurity:
+      standard: restricted
+    networkPolicies:
+      enabled: true
+      defaultDeny: true
+    containerSecurity:
+      readOnlyRoot: true
+      runAsNonRoot: true
+    imagePolicy:
+      requireSigning: true
+      requireScanning: true
+      registries:
+        allowed: ["harbor.ai-platform.example.com/*"]
+
+  cicd:
+    provider: github-actions
+    imageRegistry:
+      type: harbor
+      url: harbor.ai-platform.example.com
+    signing:
+      enabled: true
+    scanning:
+      enabled: true
+      severity: CRITICAL
+      failOnSeverity: true
+    environments:
+      prod:
+        autoDeploy: false
+        requiredApprovals: 2
+        requireTag: true
+        tagPattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"

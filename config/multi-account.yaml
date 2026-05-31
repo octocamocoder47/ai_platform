@@ -1,0 +1,247 @@
+apiVersion: platform.ai/v1
+kind: PlatformConfig
+metadata:
+  name: multi-account
+  environment: dev
+
+spec:
+  providers:
+    primary: aws
+    multi-cloud:
+      enabled: false
+    aws:
+      region: us-west-2
+      accounts:
+        - name: network
+          id: ""  # Network hub account
+          role: hub
+          regions: [us-west-2]
+        - name: workloads-dev
+          id: ""  # Dev workload account
+          role: spoke
+          regions: [us-west-2]
+        - name: shared-services
+          id: ""  # Shared services account
+          role: shared
+          regions: [us-west-2]
+        - name: security
+          id: ""  # Security/audit account
+          role: security
+          regions: [us-east-1]
+
+  networking:
+    topology: hub-spoke
+    cross_account:
+      enabled: true
+      transit_gateway:
+        enabled: true
+        share_with_accounts: [workloads-dev, shared-services, security]
+      vpc_peering:
+        enabled: false
+    cross_cloud:
+      enabled: false
+    dns:
+      provider: route53
+      zone_name: ai-platform.internal
+      private_zone: true
+    network_policies:
+      default_deny: true
+
+  kubernetes:
+    kind: eks
+    version: "1.31"
+    karpenter:
+      enabled: true
+    nodeGroups:
+      system:
+        name: system
+        instanceType: t3.medium
+        min: 2
+        max: 5
+        spot: true
+        gpu: null
+        taints: []
+        labels:
+          node-type: system
+      gpu-inference:
+        name: gpu-inference
+        instanceType: g5.xlarge
+        min: 1
+        max: 5
+        spot: false
+        gpu:
+          count: 1
+          type: nvidia-tesla-t4
+          sharing:
+            strategy: time-slicing
+            count: 4
+        taints:
+          - key: nvidia.com/gpu
+            value: "true"
+            effect: NoSchedule
+        labels:
+          node-type: gpu
+          accelerator: nvidia-tesla-t4
+      gpu-batch:
+        name: gpu-batch
+        instanceType: p5.48xlarge
+        min: 0
+        max: 2
+        spot: true
+        gpu:
+          count: 8
+          type: nvidia-h100
+          sharing:
+            strategy: none
+        taints:
+          - key: nvidia.com/gpu
+            value: "true"
+            effect: NoSchedule
+        labels:
+          node-type: gpu-batch
+          accelerator: nvidia-h100
+
+  inference:
+    model:
+      name: "google/gemma-2-2b-it"
+      source: huggingface
+      hf_token: ${HF_TOKEN}
+    serving:
+      engines: 2
+      tensorParallelSize: 1
+      maxModelLen: 8192
+      dtype: bfloat16
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      metrics:
+        - type: queue_depth
+          threshold: 5
+        - type: kv_cache
+          threshold: 0.85
+
+  components:
+    gitops:
+      type: argocd
+      ha: true
+    networking:
+      cni: cilium
+      ingress:
+        type: gateway-api
+      certManager:
+        enabled: true
+        issuer: letsencrypt-prod
+    security:
+      policy:
+        engine: kyverno
+        mode: enforce
+      secrets:
+        engine: external-secrets
+        backends:
+          - type: aws
+            name: aws-secrets-manager
+      vault:
+        enabled: true
+        ha: true
+      supplyChain:
+        signing: cosign
+        scanning: trivy
+        sbom: syft
+    storage:
+      postgres:
+        enabled: false
+      redis:
+        enabled: false
+      backup:
+        enabled: true
+        tool: velero
+        schedule: "0 2 * * *"
+        retention: 30d
+    cost:
+      enabled: true
+      tool: opencost
+    ai:
+      gpuOperator: true
+      kserve: true
+      llm-d: false
+      kueue: true
+      keda: true
+      harbor: true
+
+  observability:
+    metrics:
+      stack: kube-prometheus-stack
+      retention: 30d
+      storageSize: 50Gi
+    logging:
+      backend: loki
+      retention: 7d
+      storageSize: 100Gi
+    tracing:
+      backend: tempo
+      sampling: 0.1
+      retention: 7d
+      storageSize: 20Gi
+    dashboards:
+      enabled: true
+      grafana:
+        adminUser: admin
+        adminPassword: ${GRAFANA_PASSWORD}
+        ingress:
+          enabled: true
+          host: grafana.ai-platform.internal
+    alerting:
+      enabled: true
+      channels:
+        - type: slack
+          webhook: ${SLACK_WEBHOOK}
+          channel: "#ai-platform-alerts"
+
+  security:
+    podSecurity:
+      standard: restricted
+    networkPolicies:
+      enabled: true
+      defaultDeny: true
+    containerSecurity:
+      readOnlyRoot: true
+      runAsNonRoot: true
+      seccomp: RuntimeDefault
+    imagePolicy:
+      requireSigning: false
+      requireScanning: true
+      registries:
+        allowed: ["harbor.*", "docker.io/kserve*", "docker.io/vllm*"]
+
+  cicd:
+    provider: github-actions
+    imageRegistry:
+      type: harbor
+      url: harbor.ai-platform.internal
+    signing:
+      enabled: true
+    scanning:
+      enabled: true
+      severity: HIGH
+      failOnSeverity: true
+    environments:
+      dev:
+        autoDeploy: true
+        requiredApprovals: 0
+      staging:
+        autoDeploy: false
+        requiredApprovals: 1
+      prod:
+        autoDeploy: false
+        requiredApprovals: 2
+
+  storage:
+    shared:
+      type: efs
+      capacity: 100Gi
+      accessMode: ReadWriteMany
+    modelStorage:
+      type: s3
+      bucket: ai-platform-models
+      cacheSize: 50Gi

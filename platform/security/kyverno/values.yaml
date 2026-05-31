@@ -1,0 +1,83 @@
+kyverno:
+  version: "3.2.0"
+
+  backgroundScan:
+    enabled: true
+    interval: 1h
+
+  config:
+    resourceFilters:
+      - "[*],[*],[*]"
+      - "!,kube-system,*"
+      - "!,kyverno,*"
+
+  webhooks:
+    monitoring: true
+
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Only enable policies that are needed
+  policies:
+    - name: require-nonroot
+      spec:
+        validationFailureAction: Audit
+        background: true
+        rules:
+          - name: check-nonroot
+            match:
+              any:
+                - resources:
+                    kinds:
+                      - Pod
+            validate:
+              message: "Containers must run as non-root"
+              anyPattern:
+                - spec:
+                    securityContext:
+                      runAsNonRoot: true
+                - spec:
+                    containers:
+                      - securityContext:
+                          runAsNonRoot: true
+
+    - name: restrict-seccomp
+      spec:
+        validationFailureAction: Audit
+        background: true
+        rules:
+          - name: check-seccomp
+            match:
+              any:
+                - resources:
+                    kinds:
+                      - Pod
+            validate:
+              message: "Seccomp profile must be RuntimeDefault"
+              pattern:
+                spec:
+                  securityContext:
+                    seccompProfile:
+                      type: RuntimeDefault
+
+    - name: deny-privileged
+      spec:
+        validationFailureAction: Audit
+        background: true
+        rules:
+          - name: check-privileged
+            match:
+              any:
+                - resources:
+                    kinds:
+                      - Pod
+            validate:
+              message: "Privileged containers are not allowed"
+              pattern:
+                spec:
+                  containers:
+                    - securityContext:
+                        privileged: false
+                        allowPrivilegeEscalation: false

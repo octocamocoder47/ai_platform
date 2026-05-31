@@ -1,0 +1,151 @@
+apiVersion: platform.ai/v1
+kind: PlatformConfig
+metadata:
+  name: multi-cloud
+  environment: staging
+
+spec:
+  providers:
+    primary: aws
+    multi-cloud:
+      enabled: true
+      secondary: gcp
+    aws:
+      region: us-west-2
+      accounts:
+        - name: network
+          id: ""
+          role: hub
+          regions: [us-west-2]
+        - name: workloads
+          id: ""
+          role: spoke
+          regions: [us-west-2]
+    gcp:
+      enabled: true
+      project: ""
+      region: us-central1
+      shared_vpc:
+        enabled: true
+        host_project: ""
+
+  networking:
+    topology: hub-spoke
+    cross_account:
+      enabled: true
+      transit_gateway:
+        enabled: true
+        share_with_accounts: [workloads]
+    cross_cloud:
+      enabled: true
+      vpn:
+        type: site-to-site
+        bgp_asn: 64512
+        tunnel_count: 2
+      dns:
+        enabled: true
+        sync_enabled: true
+    dns:
+      provider: route53
+      zone_name: ai-platform.internal
+      private_zone: true
+    network_policies:
+      default_deny: true
+
+  kubernetes:
+    kind: eks
+    version: "1.31"
+    nodeGroups:
+      system:
+        name: system
+        instanceType: t3.medium
+        min: 2
+        max: 5
+        spot: true
+      gpu-inference:
+        name: gpu-inference
+        instanceType: g5.xlarge
+        min: 1
+        max: 5
+        gpu:
+          count: 1
+          type: nvidia-tesla-t4
+          sharing:
+            strategy: time-slicing
+            count: 4
+        taints:
+          - key: nvidia.com/gpu
+            value: "true"
+            effect: NoSchedule
+
+  inference:
+    model:
+      name: "google/gemma-2-2b-it"
+      hf_token: ${HF_TOKEN}
+    serving:
+      engines: 2
+      tensorParallelSize: 1
+    autoscaling:
+      minReplicas: 1
+      maxReplicas: 5
+
+  components:
+    gitops:
+      type: argocd
+      ha: true
+    networking:
+      cni: cilium
+      ingress:
+        type: gateway-api
+      certManager:
+        enabled: true
+    security:
+      policy:
+        engine: kyverno
+        mode: enforce
+      secrets:
+        engine: external-secrets
+      vault:
+        enabled: true
+    storage:
+      backup:
+        enabled: true
+        tool: velero
+    cost:
+      enabled: true
+      tool: opencost
+    ai:
+      gpuOperator: true
+      kserve: true
+      llm-d: false
+      kueue: true
+      keda: true
+      harbor: true
+
+  observability:
+    metrics:
+      stack: kube-prometheus-stack
+    logging:
+      backend: loki
+    tracing:
+      backend: tempo
+    dashboards:
+      enabled: true
+      grafana:
+        ingress:
+          enabled: true
+          host: grafana.ai-platform.internal
+
+  security:
+    podSecurity:
+      standard: restricted
+    networkPolicies:
+      enabled: true
+      defaultDeny: true
+
+  cicd:
+    provider: github-actions
+    environments:
+      staging:
+        autoDeploy: false
+        requiredApprovals: 1

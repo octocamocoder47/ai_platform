@@ -1,0 +1,57 @@
+---
+# CloudNative PG (CNPG) Helm values
+fullnameOverride: cnpg
+
+operator:
+  image:
+    repository: ghcr.io/cloudnative-pg/cloudnative-pg
+    tag: "1.24.1"
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  config:
+    # Watch all namespaces
+    WATCH_NAMESPACE: ""
+    # Enable monitoring
+    ENABLE_METRICS: "true"
+    METRICS_PORT: "8080"
+
+webhook:
+  port: 9443
+  cert:
+    duration: 87600h
+    renewBefore: 360h
+
+# Default storage class
+configMap:
+  data:
+    DEFAULT_STORAGE_CLASS: gp3
+    ENABLE_INSTANCE_MANAGER: "true"
+
+# NodeSelector for operator pod
+nodeSelector:
+  node-type: system
+
+tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
+    effect: NoSchedule
+
+# Service monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+# Backup configuration (IAM role for S3)
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: ""

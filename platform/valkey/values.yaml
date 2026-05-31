@@ -1,0 +1,80 @@
+---
+# Dragonfly / Valkey Helm values (in-memory data store)
+# Use Dragonfly as a Valkey-compatible drop-in with higher performance
+
+fullnameOverride: valkey
+
+# Dragonfly (Valkey-compatible, Redis API)
+image:
+  repository: docker.dragonflydb.io/dragonflydb/dragonfly
+  tag: "v1.22.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+# Cluster mode
+cluster:
+  enabled: true
+  replicasPerPod: 1
+
+# Resources
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 4Gi
+
+# Persistence
+persistence:
+  enabled: true
+  storageClassName: gp3
+  size: 20Gi
+  snapshotInterval: 300
+
+# Memory configuration
+extraArgs:
+  - --memcached_port=11211
+  - --keys_output_limit=8192
+  - --dbnum=16
+  - --default_lfu_cache=true
+  - --snapshot_rollup=true
+
+# TLS
+tls:
+  enabled: false
+
+# Metrics
+metrics:
+  enabled: true
+  port: 8080
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Service type
+service:
+  type: ClusterIP
+  ports:
+    valkey: 6379
+    memcached: 11211
+
+# HA
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - valkey
+          topologyKey: topology.kubernetes.io/zone
+
+# Node selector
+nodeSelector:
+  node-type: system

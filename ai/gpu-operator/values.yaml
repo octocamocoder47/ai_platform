@@ -1,0 +1,48 @@
+gpu-operator:
+  version: "24.9.2"
+
+  # Driver configuration
+  driver:
+    enabled: true
+    version: "550.90.07"
+
+  # Toolkit
+  toolkit:
+    enabled: true
+
+  # Device plugin
+  devicePlugin:
+    enabled: true
+    resources:
+      - name: nvidia.com/gpu
+        replicas: 1
+
+  # DCGM Exporter for GPU metrics
+  dcgmExporter:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 15s
+
+  # MIG configuration (for A100/H100)
+  mig:
+    enabled: false
+
+  # GPU sharing via time-slicing
+  timeSlicing:
+    enabled: true
+    resources:
+      - name: nvidia.com/gpu
+        replicas: 4
+
+  # Node feature discovery
+  nodeFeatureDiscovery:
+    enabled: true
+
+  # Validation
+  validator:
+    enabled: true
+
+  # Security context
+  securityContext:
+    runAsNonRoot: false  # Required for GPU operator

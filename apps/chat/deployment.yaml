@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-demo
+  namespace: ai-inference
+  labels:
+    app: chat-demo
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: chat-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-demo
+  namespace: ai-inference
+  labels:
+    app: chat-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-demo
+  template:
+    metadata:
+      labels:
+        app: chat-demo
+    spec:
+      serviceAccountName: chat-demo
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: chat
+          image: python:3.11-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install fastapi uvicorn openai -q
+              cat > /app/main.py << 'EOF'
+              import os
+              from fastapi import FastAPI, HTTPException
+              from pydantic import BaseModel
+              from openai import OpenAI
+
+              app = FastAPI(title="Chat Demo")
+              INFERENCE_URL = os.getenv("INFERENCE_URL", "http://llm-inference.ai-platform.svc")
+
+              client = OpenAI(
+                  base_url=f"{INFERENCE_URL}/v1",
+                  api_key="not-needed",
+              )
+
+              class ChatRequest(BaseModel):
+                  message: str
+                  model: str = "google/gemma-2-2b-it"
+
+              class ChatResponse(BaseModel):
+                  response: str
+
+              @app.get("/health")
+              def health():
+                  return {"status": "ok"}
+
+              @app.post("/chat", response_model=ChatResponse)
+              def chat(req: ChatRequest):
+                  try:
+                      completion = client.chat.completions.create(
+                          model=req.model,
+                          messages=[{"role": "user", "content": req.message}],
+                          max_tokens=256,
+                      )
+                      return ChatResponse(response=completion.choices[0].message.content)
+                  except Exception as e:
+                      raise HTTPException(status_code=500, detail=str(e))
+              EOF
+              uvicorn main:app --host 0.0.0.0 --port 8080
+          ports:
+            - containerPort: 8080
+          env:
+            - name: INFERENCE_URL
+              value: http://llm-inference-service:80
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chat-demo
+  namespace: ai-inference
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chat-demo
+  namespace: ai-inference
+spec:
+  podSelector:
+    matchLabels:
+      app: chat-demo
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vllm
+      ports:
+        - port: 8080

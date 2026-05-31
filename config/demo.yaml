@@ -1,0 +1,218 @@
+apiVersion: platform.ai/v1
+kind: PlatformConfig
+metadata:
+  name: demo
+  environment: dev
+
+spec:
+  providers:
+    primary: aws
+    multi-cloud:
+      enabled: false
+    aws:
+      region: us-west-2
+      accounts:
+        - name: demo
+          id: ""  # Fill in your AWS account ID
+          role: all-in-one
+
+  networking:
+    topology: single
+    cross_account:
+      enabled: false
+    cross_cloud:
+      enabled: false
+    dns:
+      provider: route53
+      zone_name: ai-platform.demo.internal
+      private_zone: true
+    network_policies:
+      default_deny: false
+
+  kubernetes:
+    kind: eks
+    version: "1.31"
+    karpenter:
+      enabled: true
+    nodeGroups:
+      system:
+        name: system
+        instanceType: t3.medium
+        min: 1
+        max: 3
+        spot: true
+        gpu: null
+        taints: []
+        labels:
+          node-type: system
+      gpu-inference:
+        name: gpu-inference
+        instanceType: g5.xlarge
+        min: 1
+        max: 3
+        spot: false
+        gpu:
+          count: 1
+          type: nvidia-tesla-t4
+          sharing:
+            strategy: time-slicing
+            count: 4
+        taints:
+          - key: nvidia.com/gpu
+            value: "true"
+            effect: NoSchedule
+        labels:
+          node-type: gpu
+          accelerator: nvidia-tesla-t4
+
+  inference:
+    model:
+      name: "google/gemma-2-2b-it"
+      source: huggingface
+      hf_token: ${HF_TOKEN}
+      revision: main
+    serving:
+      engine: vllm
+      engines: 1
+      tensorParallelSize: 1
+      pipelineParallelSize: 1
+      maxModelLen: 8192
+      dtype: bfloat16
+      gpuMemoryUtilization: 0.90
+      enablePrefixCaching: true
+      enableChunkedPrefill: false
+      extraArgs: []
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      cooldownPeriod: 300
+      metrics:
+        - type: queue_depth
+          threshold: 5
+        - type: kv_cache
+          threshold: 0.85
+    advanced:
+      llm-d:
+        enabled: false
+      lmcache:
+        enabled: false
+
+  components:
+    gitops:
+      type: argocd
+      ha: false
+    networking:
+      cni: cilium
+      ingress:
+        type: ingress-nginx
+      certManager:
+        enabled: false
+    security:
+      policy:
+        engine: kyverno
+        mode: audit
+      secrets:
+        engine: external-secrets
+        backends:
+          - type: aws
+            name: aws-secrets-manager
+      vault:
+        enabled: false
+      supplyChain:
+        signing: cosign
+        scanning: trivy
+        sbom: syft
+    storage:
+      postgres:
+        enabled: false
+      redis:
+        enabled: false
+      backup:
+        enabled: true
+        tool: velero
+        schedule: "0 2 * * *"
+        retention: 7d
+    cost:
+      enabled: false
+    ai:
+      gpuOperator: true
+      kserve: true
+      kserveVersion: "v0.17.0"
+      llm-d: false
+      kueue: true
+      keda: true
+      harbor: false
+
+  observability:
+    metrics:
+      stack: kube-prometheus-stack
+      retention: 7d
+      storageSize: 20Gi
+    logging:
+      backend: loki
+      retention: 3d
+      storageSize: 20Gi
+    tracing:
+      backend: tempo
+      sampling: 0.1
+      retention: 3d
+      storageSize: 10Gi
+    dashboards:
+      enabled: true
+      grafana:
+        adminUser: admin
+        adminPassword: ${GRAFANA_PASSWORD}
+        ingress:
+          enabled: false
+    alerting:
+      enabled: false
+
+  security:
+    podSecurity:
+      standard: restricted
+    networkPolicies:
+      enabled: false
+    rbac:
+      clusterAdmin: false
+      auditEnabled: true
+    encryption:
+      secrets: true
+      etcd: true
+    audit:
+      enabled: true
+      retention: 30d
+      destination: s3
+    containerSecurity:
+      readOnlyRoot: true
+      runAsNonRoot: true
+      seccomp: RuntimeDefault
+    imagePolicy:
+      requireSigning: false
+      registries:
+        allowed: ["*"]
+
+  cicd:
+    provider: github-actions
+    imageRegistry:
+      type: ecr
+    signing:
+      enabled: false
+    scanning:
+      enabled: true
+      severity: HIGH
+      failOnSeverity: false
+    environments:
+      dev:
+        autoDeploy: true
+        requiredApprovals: 0
+
+  storage:
+    shared:
+      type: efs
+      capacity: 20Gi
+      accessMode: ReadWriteMany
+    modelStorage:
+      type: s3
+      bucket: ai-platform-demo-models
+      cacheSize: 10Gi

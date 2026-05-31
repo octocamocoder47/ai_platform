@@ -1,0 +1,17 @@
+---
+# Gateway API Helm values (gateway-api-crds + provider-specific)
+
+# CRDs only — no controller
+crds:
+  install: true
+
+# Experimental channel features
+experimentalChannel: true
+
+# Enable all standard channel resources
+resources:
+  - gatewayclasses
+  - gateways
+  - httproutes
+  - referencegrants
+  - backendtlspolicies

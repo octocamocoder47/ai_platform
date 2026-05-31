@@ -1,0 +1,88 @@
+kserve:
+  version: "v0.17.0"
+
+  # Core KServe controller
+  controller:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+
+  # LLMInferenceService controller (GenAI workloads)
+  llmisvc:
+    enabled: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+
+  # Local model caching
+  localmodel:
+    enabled: false
+
+  # Gateway Inference Extension
+  inferenceGateway:
+    enabled: true
+    epp:
+      enabled: true
+      resources:
+        requests:
+          cpu: "500m"
+          memory: 512Mi
+        limits:
+          cpu: "2"
+          memory: 2Gi
+
+  # Serving runtimes
+  servingRuntimes:
+    - name: vllm-runtime
+      apiVersion: serving.kserve.io/v1alpha1
+      kind: ServingRuntime
+      metadata:
+        name: vllm-runtime
+      spec:
+        supportedModelFormats:
+          - name: vllm
+            version: "1"
+            autoSelect: true
+        containers:
+          - name: kserve-container
+            image: vllm/vllm-openai:latest
+            args:
+              - --model
+              - /mnt/models
+            resources:
+              limits:
+                nvidia.com/gpu: "1"
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+              initialDelaySeconds: 60
+              periodSeconds: 10
+
+  # Storage configuration
+  storage:
+    storageInitializer:
+      enabled: true
+      image: kserve/storage-initializer:latest
+
+  # Autoscaling
+  autoscaling:
+    enabled: true
+    scaleToZero: false
+
+  # Security
+  security:
+    podSecurityContext:
+      runAsNonRoot: true
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]

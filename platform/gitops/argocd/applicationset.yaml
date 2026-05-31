@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-components
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: cilium
+            path: platform/networking/cilium
+            namespace: cilium
+          - name: cert-manager
+            path: platform/networking/cert-manager
+            namespace: cert-manager
+          - name: kyverno
+            path: platform/security/kyverno
+            namespace: kyverno
+          - name: external-secrets
+            path: platform/security/external-secrets
+            namespace: external-secrets
+          - name: vault
+            path: platform/security/vault
+            namespace: vault
+          - name: prometheus
+            path: platform/observability/prometheus
+            namespace: monitoring
+          - name: grafana
+            path: platform/observability/grafana
+            namespace: monitoring
+          - name: loki
+            path: platform/observability/loki
+            namespace: monitoring
+          - name: tempo
+            path: platform/observability/tempo
+            namespace: monitoring
+          - name: opencost
+            path: platform/cost/opencost
+            namespace: opencost
+          - name: gpu-operator
+            path: ai/gpu-operator
+            namespace: gpu-operator
+          - name: kserve
+            path: ai/kserve
+            namespace: kserve
+          - name: keda
+            path: ai/keda
+            namespace: keda
+          - name: kueue
+            path: ai/kueue
+            namespace: kueue
+          - name: cnpg
+            path: platform/storage/cnpg
+            namespace: cnpg-system
+          - name: velero
+            path: platform/storage/velero
+            namespace: velero
+
+  template:
+    metadata:
+      name: '{{name}}'
+      labels:
+        app.kubernetes.io/part-of: ai-platform
+        app.kubernetes.io/component: '{{name}}'
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/your-org/ai-platform.git
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

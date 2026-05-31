@@ -1,0 +1,99 @@
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+      retentionSize: 20GB
+
+      resources:
+        requests:
+          cpu: "500m"
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi
+
+      serviceMonitorSelectorNilUsesHelmValues: false
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+
+    ingress:
+      enabled: false
+
+  alertmanager:
+    enabled: true
+    config:
+      global:
+        slack_api_url: ""
+      route:
+        group_by: ["namespace", "severity"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        receiver: "default"
+        routes:
+          - receiver: "critical"
+            match:
+              severity: critical
+            repeat_interval: 1h
+          - receiver: "warning"
+            match:
+              severity: warning
+      receivers:
+        - name: "default"
+        - name: "critical"
+        - name: "warning"
+
+    alertmanagerSpec:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: 128Mi
+        limits:
+          cpu: "500m"
+          memory: 512Mi
+
+  grafana:
+    enabled: false  # Deployed separately
+
+  kubeApiServer:
+    enabled: true
+    tlsConfig:
+      insecureSkipVerify: true
+
+  kubelet:
+    enabled: true
+
+  kubeControllerManager:
+    enabled: true
+
+  kubeScheduler:
+    enabled: true
+
+  kubeEtcd:
+    enabled: true
+
+  kubeStateMetrics:
+    enabled: true
+
+  kubeProxy:
+    enabled: true
+
+  nodeExporter:
+    enabled: true
+
+  prometheusOperator:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi

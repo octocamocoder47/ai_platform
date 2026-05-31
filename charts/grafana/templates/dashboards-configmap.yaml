@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-platform-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-inference.json: |-
+{{ .Files.Get "dashboards/llm-inference.json" | indent 4 }}
+  gpu-monitoring.json: |-
+{{ .Files.Get "dashboards/gpu-monitoring.json" | indent 4 }}
+  cost-monitoring.json: |-
+{{ .Files.Get "dashboards/cost-monitoring.json" | indent 4 }}
+  platform-health.json: |-
+{{ .Files.Get "dashboards/platform-health.json" | indent 4 }}

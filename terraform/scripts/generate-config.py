@@ -262,6 +262,180 @@ def generate_k8s_manifests(config, env, output_dir):
         print(f"  Generated: {so_path}")
 
 
+def generate_helm_values(config, env):
+    """Generate Helm umbrella chart values override from config."""
+    spec = config.get("spec", {})
+    components = spec.get("components", {})
+    security = spec.get("security", {})
+    observability = spec.get("observability", {})
+    storage = spec.get("storage", {})
+    inference = spec.get("inference", {})
+    kubernetes = spec.get("kubernetes", {})
+
+    # Map components → Helm chart toggles + values
+    helm_values = {
+        "global": {
+            "clusterName": f"ai-platform-{env}",
+            "environment": env,
+            "region": spec.get("providers", {}).get("aws", {}).get("region", "us-west-2"),
+        },
+    }
+
+    # Networking
+    networking = components.get("networking", {})
+    helm_values["cilium"] = {
+        "enabled": networking.get("cni") == "cilium",
+        "hubble": {"enabled": True, "relay": {"enabled": True}, "ui": {"enabled": True}},
+        "encryption": {"enabled": True, "type": "wireguard"},
+        "gatewayAPI": {"enabled": True},
+    }
+
+    cert = networking.get("certManager", {})
+    helm_values["cert-manager"] = {
+        "enabled": cert.get("enabled", False),
+        "installCRDs": True,
+    }
+
+    helm_values["gateway-api"] = {
+        "enabled": True,
+        "experimentalChannel": True,
+    }
+
+    # GitOps
+    gitops = components.get("gitops", {})
+    helm_values["argo-cd"] = {
+        "enabled": gitops.get("type") == "argocd",
+        "configs": {
+            "params": {"server.insecure": True},
+            "cm": {"timeout.reconciliation": "60s"},
+        },
+    }
+
+    # Security
+    policy = components.get("security", {}).get("policy", {})
+    helm_values["kyverno"] = {
+        "enabled": policy.get("engine") == "kyverno",
+        "mode": policy.get("mode", "audit"),
+    }
+
+    secrets_engine = components.get("security", {}).get("secrets", {})
+    helm_values["external-secrets"] = {
+        "enabled": secrets_engine.get("engine") == "external-secrets",
+        "installCRDs": True,
+    }
+
+    vault = components.get("security", {}).get("vault", {})
+    helm_values["vault"] = {
+        "enabled": vault.get("enabled", False),
+        "ha": {"enabled": True, "replicas": 3, "raft": {"enabled": True}},
+    }
+
+    helm_values["opa-gatekeeper"] = {"enabled": False}
+
+    # Observability
+    obs = observability
+    helm_values["kube-prometheus-stack"] = {
+        "enabled": obs.get("metrics", {}).get("stack") == "kube-prometheus-stack",
+        "prometheus": {
+            "retention": obs.get("metrics", {}).get("retention", "7d"),
+            "storageSize": obs.get("metrics", {}).get("storageSize", "20Gi"),
+        },
+    }
+
+    helm_values["grafana"] = {
+        "enabled": obs.get("dashboards", {}).get("enabled", False),
+        "adminUser": obs.get("dashboards", {}).get("grafana", {}).get("adminUser", "admin"),
+        "adminPassword": obs.get("dashboards", {}).get("grafana", {}).get("adminPassword", "${GRAFANA_PASSWORD}"),
+    }
+
+    helm_values["loki"] = {
+        "enabled": obs.get("logging", {}).get("backend") == "loki",
+        "retention": obs.get("logging", {}).get("retention", "3d"),
+        "storageSize": obs.get("logging", {}).get("storageSize", "20Gi"),
+    }
+
+    helm_values["tempo"] = {
+        "enabled": obs.get("tracing", {}).get("backend") == "tempo",
+        "retention": obs.get("tracing", {}).get("retention", "3d"),
+        "sampling": obs.get("tracing", {}).get("sampling", 0.1),
+    }
+
+    helm_values["opentelemetry-operator"] = {
+        "enabled": obs.get("tracing", {}).get("backend") is not None,
+        "autoInstrumentation": {"enabled": True, "python": True, "nodejs": True},
+    }
+
+    # Storage
+    storage_config = components.get("storage", {})
+    helm_values["cnpg"] = {
+        "enabled": storage_config.get("postgres", {}).get("enabled", False),
+    }
+    helm_values["dragonfly"] = {
+        "enabled": storage_config.get("redis", {}).get("enabled", False),
+        "replicas": 3,
+        "persistence": {"size": "20Gi"},
+    }
+    helm_values["velero"] = {
+        "enabled": storage_config.get("backup", {}).get("enabled", False),
+        "schedule": storage_config.get("backup", {}).get("schedule", "0 2 * * *"),
+        "retention": storage_config.get("backup", {}).get("retention", "7d"),
+    }
+
+    # Cost
+    helm_values["opencost"] = {
+        "enabled": components.get("cost", {}).get("enabled", False),
+    }
+
+    # AI Infrastructure
+    ai = components.get("ai", {})
+    helm_values["gpu-operator"] = {
+        "enabled": ai.get("gpuOperator", True),
+        "timeSlicing": {"enabled": True, "count": 4, "resources": ["nvidia.com/gpu"]},
+    }
+
+    helm_values["kserve"] = {
+        "enabled": ai.get("kserve", True),
+        "controller": {"imageTag": f"v{ai.get('kserveVersion', '0.14.0')}"},
+        "vllm": {"enabled": True, "runtime": "vllm"},
+    }
+
+    helm_values["keda"] = {
+        "enabled": ai.get("keda", True),
+        "prometheus": {"enabled": True},
+    }
+
+    helm_values["kueue"] = {
+        "enabled": ai.get("kueue", True),
+        "resources": ["cpu", "memory", "nvidia.com/gpu"],
+    }
+
+    # AI serving
+    model = inference.get("model", {})
+    serving = inference.get("serving", {})
+    autoscaling = inference.get("autoscaling", {})
+
+    helm_values["llm-d"] = {
+        "enabled": ai.get("llm-d", False),
+        "backend": serving.get("engine", "vllm"),
+        "model": {
+            "name": model.get("name", "google/gemma-2-2b-it").split("/")[-1],
+            "tensorParallelism": serving.get("tensorParallelSize", 1),
+            "pipelineParallelism": serving.get("pipelineParallelSize", 1),
+        },
+    }
+
+    helm_values["ai-gateway"] = {
+        "enabled": True,
+        "model": model.get("name", "google/gemma-2-2b-it"),
+        "pool": {
+            "minReplicas": autoscaling.get("minReplicas", 1),
+            "maxReplicas": autoscaling.get("maxReplicas", 3),
+        },
+    }
+
+    return helm_values
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: generate-config.py <config.yaml> [--env ENV]")
@@ -294,11 +468,19 @@ def main():
         json.dump(tfvars, f, indent=2)
     print(f"  Generated: {tfvars_path}")
 
+    # Generate Helm values
+    helm_values = generate_helm_values(config, env)
+    helm_values_path = project_root / "charts" / "ai-platform" / "values-generated.yaml"
+    with open(helm_values_path, "w") as f:
+        yaml.dump(helm_values, f, default_flow_style=False, sort_keys=False)
+    print(f"  Generated: {helm_values_path}")
+
     # Generate K8s manifests
     generate_k8s_manifests(config, env, str(project_root))
 
     print("\n✓ Configuration generation complete")
-    print(f"  Templates in: {env_dir}")
+    print(f"  Terraform in: {env_dir}")
+    print(f"  Helm values:  {helm_values_path}")
 
 
 if __name__ == "__main__":

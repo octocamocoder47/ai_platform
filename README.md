@@ -32,7 +32,7 @@ cp config/demo.yaml config/demo.yaml  # Edit with your AWS account ID
 export HF_TOKEN="your-huggingface-token"
 export AWS_PROFILE="your-aws-profile"
 
-# 3. Deploy everything
+# 3. Deploy everything (Terraform → Helm)
 make bootstrap CONFIG=config/demo.yaml
 ```
 
@@ -42,17 +42,19 @@ Or step by step:
 # 1. Bootstrap Terraform backend
 make backend-init
 
-# 2. Validate and generate config
+# 2. Validate and generate config + Helm values
 make validate
 make config-generate
 
 # 3. Provision infrastructure
 make apply-all
 
-# 4. Configure kubectl
-aws eks update-kubeconfig --name ai-platform-dev --region us-west-2
+# 4. Build and install Helm charts
+make helm-deps
+make helm-install
 
-# 5. ArgoCD auto-syncs platform components
+# 5. Configure kubectl
+aws eks update-kubeconfig --name ai-platform-dev --region us-west-2
 
 # 6. Verify inference endpoint
 curl http://llm-inference.ai-platform.svc/v1/chat/completions \
@@ -117,6 +119,33 @@ ai-platform/
 ├── clusters/            # Base cluster configuration
 └── .github/             # CI/CD workflows
 ```
+
+## Helm Chart Architecture
+
+Each platform component is a modular Helm chart with config-driven enable/disable toggles:
+
+```
+charts/
+  ai-platform/           ⬅ Umbrella chart (helm install this)
+  ├── Chart.yaml         # 22 dependency conditions
+  ├── values.yaml        # All component toggles + overrides
+  └── templates/         # Namespaces, platform resources
+  gateway-api/           # Gateway API CRDs
+  grafana/               # Dashboards + datasources
+  llm-d/                 # Distributed inference
+  ai-gateway/            # InferenceModel, HTTPRoute, HPA
+```
+
+**Toggle any component** in `charts/ai-platform/values.yaml`:
+```yaml
+vault:
+  enabled: false         # Skip Vault entirely
+kyverno:
+  enabled: true          # Enable Kyverno
+  mode: audit            # Start in audit mode
+```
+
+Generate from config: `make config-generate ENV=prod` produces `charts/ai-platform/values-generated.yaml`
 
 ## Key Technologies
 

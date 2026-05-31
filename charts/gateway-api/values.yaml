@@ -1,0 +1,8 @@
+experimentalChannel: true
+
+resources:
+  - gatewayclasses
+  - gateways
+  - httproutes
+  - referencegrants
+  - backendtlspolicies

@@ -1,0 +1,56 @@
+backend: vllm
+
+model:
+  name: gemma-2b
+  hfModelId: google/gemma-2b
+  revision: main
+  tensorParallelism: 1
+  pipelineParallelism: 1
+  dataParallelism: 1
+  dtype: bfloat16
+  maxModelLen: 4096
+
+workerGroups:
+  - name: gpu-workers
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 4
+    resources:
+      requests:
+        cpu: 2
+        memory: 8Gi
+        nvidia.com/gpu: 1
+      limits:
+        cpu: 8
+        memory: 32Gi
+        nvidia.com/gpu: 1
+
+autoscaling:
+  enabled: true
+  cooldownPeriod: 300
+  pollInterval: 15
+  metrics:
+    - type: prometheus
+      query: rate(vllm:requests_total[1m]) / rate(vllm:max_requests[1m])
+      threshold: 0.7
+
+storage:
+  type: pvc
+  size: 50Gi
+  storageClassName: gp3
+
+service:
+  type: ClusterIP
+  port: 8000
+  openaiCompatible: true
+
+observability:
+  metrics:
+    enabled: true
+    port: 8080
+  tracing:
+    enabled: true
+    endpoint: http://opentelemetry-collector:4317
+  logging:
+    level: info
+    format: json

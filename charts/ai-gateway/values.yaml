@@ -1,0 +1,16 @@
+model: google/gemma-2-2b-it
+
+pool:
+  minReplicas: 1
+  maxReplicas: 3
+  targetPort: 8000
+
+inferenceModel:
+  name: gemma2
+  storageUri: "pvc://model-storage/gemma-2b"
+
+gateway:
+  hostnames:
+    - "ai.example.com"
+  tls:
+    enabled: false

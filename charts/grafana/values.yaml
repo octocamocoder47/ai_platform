@@ -1,0 +1,53 @@
+adminUser: admin
+adminPassword: changeme
+
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    folder: /tmp/dashboards
+    provider:
+      foldersFromFilesStructure: true
+
+dashboardsConfigMaps:
+  ai-platform: ai-platform-dashboards
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://kube-prometheus-stack-prometheus.monitoring:9090
+        access: proxy
+        isDefault: true
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki.monitoring:3100
+        access: proxy
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://tempo.monitoring:3100
+        access: proxy
+      - name: Hubble
+        type: hubble-datasource
+        uid: hubble
+        url: http://hubble-ui.platform:12021
+        access: proxy
+
+persistence:
+  enabled: false
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

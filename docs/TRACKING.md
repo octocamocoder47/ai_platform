@@ -14,7 +14,7 @@ Phase 5: AI Infrastructure      ████████████████
 Phase 6: Model Serving          ██████░░░░░░░░░░░░░░░░░░   25%
 Phase 7: Polish & Portfolio     ██████████████░░░░░░░░░░   55%
 
-Total:                          ████████████████░░░░░░░░   65%
+Total:                          ████████████████░░░░░░░░   67%
 ```
 
 ## Phase 1: Foundation (Complete)
@@ -105,6 +105,16 @@ Total:                          ████████████████
 | `terraform/bootstrap/outputs.tf` | ✅ Complete | |
 | `terraform/scripts/generate-config.py` | ✅ Complete | Reads config, generates tfvars + K8s manifests |
 | `terraform/scripts/apply-all.sh` | ✅ Complete | Applies in dependency order |
+
+### Charts Restructure (Session 3)
+
+- ✅ Umbrella chart at `charts/ai-platform/` with condition-based toggles for all 22 components
+- ✅ Local component charts: `gateway-api`, `grafana`, `llm-d`, `ai-gateway`
+- ✅ Each local chart has `Chart.yaml`, `values.yaml`, and `templates/`
+- ✅ Umbrella `values.yaml` maps to `config/demo.yaml` sections
+- ✅ `generate-config.py` produces `charts/ai-platform/values-generated.yaml`
+- ✅ `scripts/build-charts.sh` runs `helm dependency update`
+- ✅ Makefile targets: `helm-deps`, `helm-lint`, `helm-install`, `helm-upgrade`
 
 ## Phase 3: Platform Core (~80%)
 

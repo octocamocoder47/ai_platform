@@ -1,0 +1,214 @@
+# AI Platform — Umbrella Chart Values
+# Drives all component enablement and configuration.
+# Each top-level key maps to a subchart dependency in Chart.yaml.
+#
+# Usage:
+#   helm install ai-platform ./charts/ai-platform --values values.yaml
+#   # or via ArgoCD pointing to this chart
+
+# ── Global Settings ───────────────────────────────────────────
+global:
+  clusterName: "ai-platform-dev"
+  environment: dev
+  region: us-west-2
+
+# ── Component Toggles ─────────────────────────────────────────
+# Set enabled: false to skip installation entirely.
+
+# Networking ───────────────────────────────────────────────────
+cilium:
+  enabled: true
+  hubble:
+    enabled: true
+    relay:
+      enabled: true
+    ui:
+      enabled: true
+  ipam:
+    mode: kubernetes
+  encryption:
+    enabled: true
+    type: wireguard
+  gatewayAPI:
+    enabled: true
+
+cert-manager:
+  enabled: true
+  installCRDs: true
+
+gateway-api:
+  enabled: true
+  experimentalChannel: true
+
+# GitOps ───────────────────────────────────────────────────────
+argo-cd:
+  enabled: true
+  configs:
+    params:
+      server.insecure: true
+    cm:
+      timeout.reconciliation: 60s
+  server:
+    ingress:
+      enabled: false
+
+# Security ─────────────────────────────────────────────────────
+kyverno:
+  enabled: true
+  mode: audit
+  backgroundScan: true
+
+external-secrets:
+  enabled: true
+  installCRDs: true
+  scopedNamespace: platform
+
+vault:
+  enabled: false
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+
+opa-gatekeeper:
+  enabled: false
+  audit:
+    logLevel: info
+  mutation:
+    enabled: false
+
+# Observability ────────────────────────────────────────────────
+kube-prometheus-stack:
+  enabled: true
+  prometheus:
+    retention: 7d
+    storageSize: 20Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+  alertmanager:
+    enabled: true
+
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: ${GRAFANA_PASSWORD}
+  dashboards:
+    enabled: true
+  ingress:
+    enabled: false
+
+loki:
+  enabled: true
+  retention: 3d
+  storageSize: 20Gi
+  backend: s3
+
+tempo:
+  enabled: true
+  retention: 3d
+  sampling: 0.1
+  receivers:
+    otlp:
+      protocols:
+        grpc: true
+        http: true
+
+opentelemetry-operator:
+  enabled: true
+  autoInstrumentation:
+    enabled: true
+    java: false
+    nodejs: true
+    python: true
+
+# Storage ──────────────────────────────────────────────────────
+cnpg:
+  enabled: false
+  backup:
+    enabled: true
+    retention: 7d
+    schedule: "0 2 * * *"
+
+dragonfly:
+  enabled: false
+  replicas: 3
+  persistence:
+    size: 20Gi
+
+velero:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: 7d
+  backups:
+    enabled: true
+    namespaces:
+      - ai
+      - platform
+      - monitoring
+
+# Cost ─────────────────────────────────────────────────────────
+opencost:
+  enabled: false
+  gpu:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+# AI Infrastructure ────────────────────────────────────────────
+gpu-operator:
+  enabled: true
+  driver:
+    enabled: true
+    version: "550"
+  toolkit:
+    enabled: true
+  dcgm:
+    enabled: true
+  mig:
+    enabled: false
+  timeSlicing:
+    enabled: true
+    count: 4
+    resources:
+      - nvidia.com/gpu
+
+kserve:
+  enabled: true
+  controller:
+    imageTag: v0.14.0
+  vllm:
+    enabled: true
+    runtime: vllm
+    defaultModel: google/gemma-2-2b-it
+
+keda:
+  enabled: true
+  prometheus:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+kueue:
+  enabled: true
+  resources:
+    - cpu
+    - memory
+    - nvidia.com/gpu
+  fairSharing:
+    enabled: true
+
+# AI Serving Extensions ────────────────────────────────────────
+llm-d:
+  enabled: false
+  backend: vllm
+  model:
+    name: gemma-2b
+    tensorParallelism: 1
+    pipelineParallelism: 1
+
+ai-gateway:
+  enabled: true
+  model: google/gemma-2-2b-it
+  pool:
+    minReplicas: 1
+    maxReplicas: 3

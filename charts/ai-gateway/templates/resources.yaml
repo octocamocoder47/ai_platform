@@ -1,0 +1,77 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.model | replace "/" "-" | replace "." "-" }}
+  namespace: ai
+  labels:
+    app: ai-gateway
+spec:
+  parentRefs:
+    - name: ai-gateway
+      namespace: gateway
+  hostnames:
+{{- range .Values.gateway.hostnames }}
+    - {{ . | quote }}
+{{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - name: kserve-{{ .Values.model | replace "/" "-" | replace "." "-" }}
+          port: 80
+          weight: 1
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceModel
+metadata:
+  name: {{ .Values.inferenceModel.name }}
+  namespace: ai
+  labels:
+    app: ai-gateway
+spec:
+  model:
+    modelFormat:
+      name: vllm
+    storageUri: {{ .Values.inferenceModel.storageUri }}
+    resources:
+      requests:
+        cpu: "2"
+        memory: 8Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "8"
+        memory: 32Gi
+        nvidia.com/gpu: "1"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inferencepool-config
+  namespace: ai
+data:
+  minReplicas: "{{ .Values.pool.minReplicas }}"
+  maxReplicas: "{{ .Values.pool.maxReplicas }}"
+  targetPort: "{{ .Values.pool.targetPort }}"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Values.inferenceModel.name }}-hpa
+  namespace: ai
+spec:
+  scaleTargetRef:
+    apiVersion: serving.kserve.io/v1beta1
+    kind: InferenceModel
+    name: {{ .Values.inferenceModel.name }}
+  minReplicas: {{ .Values.pool.minReplicas }}
+  maxReplicas: {{ .Values.pool.maxReplicas }}
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: vllm:running_reqs
+        target:
+          type: AverageValue
+          averageValue: 10

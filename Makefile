@@ -29,6 +29,29 @@ config-generate: ## Generate config from YAML
 lint: ## Lint YAML files
 	yamllint config/ platform/ ai/
 
+## === Helm ===
+
+helm-deps: ## Build Helm chart dependencies
+	./scripts/build-charts.sh
+
+helm-lint: ## Lint Helm charts
+	helm lint charts/ai-platform/ $(shell find charts/ -name Chart.yaml -not -path "*/ai-platform/*" -exec dirname {} \;)
+
+helm-dry-run: ## Dry run install
+	helm install --dry-run --debug ai-platform ./charts/ai-platform --values charts/ai-platform/values.yaml
+
+helm-install: helm-deps ## Install AI Platform via Helm
+	helm install ai-platform ./charts/ai-platform --values charts/ai-platform/values.yaml
+
+helm-upgrade: helm-deps ## Upgrade AI Platform
+	helm upgrade ai-platform ./charts/ai-platform --values charts/ai-platform/values.yaml
+
+helm-uninstall: ## Uninstall AI Platform
+	helm uninstall ai-platform
+
+helm-template: ## Render chart templates
+	helm template ai-platform ./charts/ai-platform --values charts/ai-platform/values.yaml
+
 ## === Terraform ===
 
 plan: ## Terraform plan

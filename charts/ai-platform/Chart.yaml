@@ -1,0 +1,152 @@
+apiVersion: v2
+name: ai-platform
+description: AI Platform — config-driven LLM inference infrastructure
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+dependencies:
+  # ── Networking ──────────────────────────────────────────────
+  - name: cilium
+    repository: https://helm.cilium.io/
+    version: "1.16.x"
+    condition: cilium.enabled
+    tags: ["networking", "cni"]
+
+  - name: cert-manager
+    repository: https://charts.jetstack.io
+    version: "1.16.x"
+    condition: cert-manager.enabled
+    tags: ["networking", "certificates"]
+
+  - name: gateway-api
+    repository: "file://../gateway-api"
+    version: ">=0.0.0"
+    condition: gateway-api.enabled
+    tags: ["networking", "gateway"]
+
+  # ── GitOps ──────────────────────────────────────────────────
+  - name: argo-cd
+    repository: https://argoproj.github.io/argo-helm
+    version: "7.x"
+    condition: argo-cd.enabled
+    tags: ["gitops", "cicd"]
+
+  # ── Security ────────────────────────────────────────────────
+  - name: kyverno
+    repository: https://kyverno.github.io/kyverno/
+    version: "3.2.x"
+    condition: kyverno.enabled
+    tags: ["security", "policy"]
+
+  - name: external-secrets
+    repository: https://charts.external-secrets.io
+    version: "0.11.x"
+    condition: external-secrets.enabled
+    tags: ["security", "secrets"]
+
+  - name: vault
+    repository: https://helm.releases.hashicorp.com
+    version: "0.28.x"
+    condition: vault.enabled
+    tags: ["security", "secrets"]
+
+  - name: opa-gatekeeper
+    repository: https://open-policy-agent.github.io/gatekeeper/charts
+    version: "3.18.x"
+    condition: opa-gatekeeper.enabled
+    tags: ["security", "policy"]
+
+  # ── Observability ───────────────────────────────────────────
+  - name: kube-prometheus-stack
+    repository: https://prometheus-community.github.io/helm-charts
+    version: "62.x"
+    condition: kube-prometheus-stack.enabled
+    tags: ["observability", "metrics"]
+
+  - name: grafana
+    repository: "file://../grafana"
+    version: ">=0.0.0"
+    condition: grafana.enabled
+    tags: ["observability", "dashboards"]
+
+  - name: loki
+    repository: https://grafana.github.io/helm-charts
+    version: "6.x"
+    condition: loki.enabled
+    tags: ["observability", "logging"]
+
+  - name: tempo
+    repository: https://grafana.github.io/helm-charts
+    version: "1.10.x"
+    condition: tempo.enabled
+    tags: ["observability", "tracing"]
+
+  - name: opentelemetry-operator
+    repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+    version: "0.73.x"
+    condition: opentelemetry-operator.enabled
+    tags: ["observability", "tracing"]
+
+  # ── Storage ─────────────────────────────────────────────────
+  - name: cnpg
+    repository: https://cloudnative-pg.github.io/charts
+    version: "0.23.x"
+    condition: cnpg.enabled
+    tags: ["storage", "database"]
+
+  - name: dragonfly
+    repository: https://dragonflydb.github.io/helm-charts
+    version: "1.22.x"
+    condition: dragonfly.enabled
+    tags: ["storage", "cache"]
+
+  - name: velero
+    repository: https://vmware-tanzu.github.io/helm-charts
+    version: "7.1.x"
+    condition: velero.enabled
+    tags: ["storage", "backup"]
+
+  # ── Cost ────────────────────────────────────────────────────
+  - name: opencost
+    repository: https://opencost.github.io/opencost-helm-chart
+    version: "1.42.x"
+    condition: opencost.enabled
+    tags: ["cost", "finops"]
+
+  # ── AI Infrastructure ───────────────────────────────────────
+  - name: gpu-operator
+    repository: https://helm.ngc.nvidia.com/nvidia
+    version: "24.9.x"
+    condition: gpu-operator.enabled
+    tags: ["ai", "gpu"]
+
+  - name: kserve
+    repository: https://kserve.github.io/helm-charts
+    version: "0.14.x"
+    condition: kserve.enabled
+    tags: ["ai", "serving"]
+
+  - name: keda
+    repository: https://kedacore.github.io/charts
+    version: "2.15.x"
+    condition: keda.enabled
+    tags: ["ai", "autoscaling"]
+
+  - name: kueue
+    repository: https://kubernetes-sigs.github.io/kueue
+    version: "0.9.x"
+    condition: kueue.enabled
+    tags: ["ai", "scheduling"]
+
+  - name: llm-d
+    repository: "file://../llm-d"
+    version: ">=0.0.0"
+    condition: llm-d.enabled
+    tags: ["ai", "distributed"]
+
+  - name: ai-gateway
+    repository: "file://../ai-gateway"
+    version: ">=0.0.0"
+    condition: ai-gateway.enabled
+    tags: ["ai", "gateway"]
